@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8" />
+    <title>Teachable Machine 음료 분류기</title>
+
+    <!-- TensorFlow.js & Teachable Machine 라이브러리 -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+
+    <style>
+        body {
+            font-family: sans-serif;
+            text-align: center;
+            padding: 20px;
+        }
+        #webcam-container {
+            margin-top: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <h2>음료 인식기</h2>
+    <button type="button" onclick="unlockAudio(); init();">Start</button>
+    <div id="webcam-container"></div>
+    <div id="label-container"></div>
+
+    <script type="text/javascript">
+        const URL = "https://teachablemachine.withgoogle.com/models/j8JTBNFXZ/";
+        let model, webcam, labelContainer, maxPredictions;
+        let lastSpoken = "";
+
+        // 음성 재생 권한 확보용 (모바일에서 꼭 필요)
+        function unlockAudio() {
+            const dummy = new SpeechSynthesisUtterance("시작합니다");
+            dummy.lang = "ko-KR";
+            dummy.volume = 0; // 소리 안 나게
+            speechSynthesis.speak(dummy);
+        }
+
+        async function init() {
+            const modelURL = URL + "model.json";
+            const metadataURL = URL + "metadata.json";
+
+            model = await tmImage.load(modelURL, metadataURL);
+            maxPredictions = model.getTotalClasses();
+
+            const flip = false; // 후방 카메라는 뒤집을 필요 없음
+            webcam = new tmImage.Webcam(200, 200, flip);
+
+            // 후방 카메라 사용
+            await webcam.setup({ facingMode: "environment" });
+            await webcam.play();
+            window.requestAnimationFrame(loop);
+
+            document.getElementById("webcam-container").appendChild(webcam.canvas);
+            labelContainer = document.getElementById("label-container");
+            for (let i = 0; i < maxPredictions; i++) {
+                labelContainer.appendChild(document.createElement("div"));
+            }
+        }
+
+        async function loop() {
+            webcam.update();
+            await predict();
+            window.requestAnimationFrame(loop);
+        }
+
+        async function predict() {
+            const prediction = await model.predict(webcam.canvas);
+
+            for (let i = 0; i < maxPredictions; i++) {
+                const classPrediction =
+                    prediction[i].className + ": " + prediction[i].probability.toFixed(2);
+                labelContainer.childNodes[i].innerHTML = classPrediction;
+            }
+
+            prediction.sort((a, b) => b.probability - a.probability);
+            const top = prediction[0];
+
+            if (top.probability > 0.95 && top.className !== lastSpoken) {
+                speak(top.className + "입니다");
+                lastSpoken = top.className;
+            }
+        }
+
+        function speak(text) {
+            const utter = new SpeechSynthesisUtterance(text);
+            utter.lang = "ko-KR";
+            utter.rate = 1.0;
+            speechSynthesis.speak(utter);
+        }
+    </script>
+</body>
+</html>
